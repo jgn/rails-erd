@@ -12,6 +12,10 @@ module RailsERD
         def from_model(domain, model) # @private :nodoc:
           attributes = model.columns.collect { |column| new(domain, model, column) }
           RailsERD.options[:sort] ? attributes.sort : attributes
+          cols = model.columns.collect { |column| new(domain, model, column) }
+          primary = cols.detect{|m| m.column.primary }
+          cols.delete(primary)
+          cols.sort.unshift(primary)
         end
       end
 
@@ -46,6 +50,12 @@ module RailsERD
       # <tt>NOT NULL</tt> database constraint.
       def mandatory?
         !column.null or @model.validators_on(name).map(&:kind).include?(:presence)
+      end
+
+      # Returns +true+ if this attribute is unique. Unique attributes
+      # either have a uniueness validation.
+      def unique?
+        @model.validators_on(name).map(&:kind).include?(:uniqueness)
       end
 
       # Returns +true+ if this attribute is the primary key of the entity.
@@ -94,7 +104,10 @@ module RailsERD
       def type_description
         type.to_s.tap do |desc|
           desc << " #{limit_description}" if limit_description
-          desc << " ∗" if mandatory? # Add a hair space + low asterisk (Unicode characters).
+          desc << " ∗" if mandatory? && !primary_key? # Add a hair space + low asterisk (Unicode characters)
+          desc << " U" if unique? && !primary_key? && !foreign_key? # Add U if unique but non-key
+          desc << " PK" if primary_key?
+          desc << " FK" if foreign_key?
         end
       end
 
